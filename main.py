@@ -418,7 +418,7 @@ def main():
     app.add_handler(CommandHandler("new_chat", new_chat))
     app.add_handler(CommandHandler("new_user", add_user_chat))
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, chat))
-    logging.info("Bot avviato 🚀")
+    logging.info("Start bot 🚀")
     app.run_polling(timeout=TELEGRAM_POOL_TIMEOUT)
 
 
