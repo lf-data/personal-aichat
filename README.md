@@ -72,6 +72,7 @@ This project is a private-but-extensible Telegram assistant powered by OpenAI GP
 | `DEBUG_TELEGRAM` | ➖ | `1` to include stack traces in logs and admin replies. |
 | `TELEGRAM_CONNECTION_TIMEOUT`, `TELEGRAM_POOL_TIMEOUT`, `TELEGRAM_READ_TIMEOUT` | ➖ | Fine-tune bot network timeouts (seconds). |
 | `TAVILY_API_KEY` | ➖ | Enables the Tavily search tool. |
+| `LANGUAGE` | ➖ | The languages allowed are `it`(italian) and `eng` (english). Default is `eng`|
 
 > Tip: store secrets in a `.env` file and let `python-dotenv` (already imported in `main.py`) load them automatically.
 
