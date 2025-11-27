@@ -1,7 +1,6 @@
 python-telegram-bot
 openai
 python-dotenv
-tinydb
 telegramify-markdown
 requests
 langchain
