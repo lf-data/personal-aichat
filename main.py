@@ -23,6 +23,17 @@ from chat_utils.utils import (
     init_db,
     is_valid_email,
 )
+from chat_utils.messages import (
+    NOT_AUTHENTICATED_MESSAGE,
+    NOT_AUTHENTICATED_MESSAGE_ADMIN,
+    INFO_MESSAGE,
+    WELCOME_MESSAGE,
+    WAITING_MESSAGE,
+    ERROR_AUTH_MESSAGE,
+    ERROR_INFO_MESSAGE,
+    ERROR_START_MESSAGE,
+    ERROR_CHAT_MESSAGE
+)
 
 from tool import load_tools
 from chat_utils.openai_provider import model
@@ -43,7 +54,6 @@ from time import time
 import json
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-ASSISTANT_NAME = os.getenv("ASSISTANT_NAME", "AiChat")
 TELEGRAM_CONNECTION_TIMEOUT = int(os.getenv("TELEGRAM_CONNECTION_TIMEOUT", "60"))
 TELEGRAM_POOL_TIMEOUT = int(os.getenv("TELEGRAM_POOL_TIMEOUT", "60"))
 TELEGRAM_READ_TIMEOUT = int(os.getenv("TELEGRAM_READ_TIMEOUT", "60"))
@@ -62,6 +72,7 @@ def authorized(func):
     Decorator to check if the user is authorized to use the bot.
     If not authorized, sends a message to the user.
     """
+
     @wraps(func)
     async def wrapper(
         update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs
@@ -69,23 +80,16 @@ def authorized(func):
         try:
             user_id = update.effective_user.id
             if not await check_user_exist(user_id):
-                await update.effective_message.reply_text(
-                    "❌ Questo bot è ad accesso limitato e non sei autorizzato a utilizzarlo.\n"
-                    "I messaggi che invii non vengono inoltrati all'intelligenza artificiale "
-                    "e sono usati solo per verificare l'accesso.\n"
-                    "Ti chiediamo di non usare questo bot."
-                )
+                await update.effective_message.reply_text(NOT_AUTHENTICATED_MESSAGE)
                 return
             await create_user_if_not_exists(user_id)
             return await func(update, context, *args, **kwargs)
         except Exception as e:
             logging.error(
-                f"Si è verificato un errore nella fase di autenticazione dell'utente: {e}",
+                f"{ERROR_AUTH_MESSAGE} {e}",
                 exc_info=DEBUG,
             )
-            sent_msg = await update.effective_message.reply_text(
-                "❌ Si è verificato un errore nella fase di autenticazione dell'utente."
-            )
+            sent_msg = await update.effective_message.reply_text(ERROR_AUTH_MESSAGE)
             await save_user_message(update.effective_user.id, sent_msg.message_id)
             if await user_is_admin(update.effective_user.id):
                 sent_msg_error = await update.effective_message.reply_text(str(e))
@@ -101,6 +105,7 @@ def authorized_admin(func):
     Decorator to check if the user is an admin.
     If not an admin, sends a message to the user.
     """
+
     @wraps(func)
     async def wrapper(
         update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs
@@ -108,29 +113,22 @@ def authorized_admin(func):
         try:
             user_id = update.effective_user.id
             if not await check_user_exist(user_id):
-                await update.effective_message.reply_text(
-                    "❌ Questo bot è ad accesso limitato e non sei autorizzato a utilizzarlo.\n"
-                    "I messaggi che invii non vengono inoltrati all'intelligenza artificiale "
-                    "e sono usati solo per verificare l'accesso.\n"
-                    "Ti chiediamo di non usare questo bot."
-                )
+                await update.effective_message.reply_text(NOT_AUTHENTICATED_MESSAGE)
                 return
 
             if not await user_is_admin(user_id):
                 await update.effective_message.reply_text(
-                    "❌ Non sei autorizzato ad usare questo comando.\nSolo gli utenti amministratori possono aggiungere nuovi utenti."
+                    NOT_AUTHENTICATED_MESSAGE_ADMIN
                 )
                 return
             await create_user_if_not_exists(user_id)
             return await func(update, context, *args, **kwargs)
         except Exception as e:
             logging.error(
-                f"Si è verificato un errore nella fase di autenticazione dell'utente: {e}",
+                f"{ERROR_AUTH_MESSAGE} {e}",
                 exc_info=DEBUG,
             )
-            sent_msg = await update.effective_message.reply_text(
-                "❌ Si è verificato un errore nella fase di autenticazione dell'utente."
-            )
+            sent_msg = await update.effective_message.reply_text(ERROR_AUTH_MESSAGE)
             await save_user_message(update.effective_user.id, sent_msg.message_id)
             if await user_is_admin(update.effective_user.id):
                 sent_msg_error = await update.effective_message.reply_text(str(e))
@@ -153,26 +151,18 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         if not check_user_exist(user_id):
             sent_msg = await update.effective_message.reply_text(
-                "❌ Questo bot è ad accesso limitato e non sei autorizzato a utilizzarlo.\n"
-                "I messaggi che invii non vengono inoltrati all'intelligenza artificiale "
-                "e sono usati solo per verificare l'accesso.\n"
-                "Ti chiediamo di non usare questo bot."
+                NOT_AUTHENTICATED_MESSAGE
             )
         else:
-            sent_msg = await update.effective_message.reply_text(
-                "Questo bot utilizza un servizio di intelligenza artificiale per generare le risposte.\n"
-                "Le risposte possono contenere errori e non sostituiscono il parere di un professionista.\n"
-                "Non inviare dati sensibili (salute, password, dati bancari, documenti, ecc.).\n"
-                "Il bot è ad uso privato/sperimentale e l'accesso è limitato a utenti autorizzati."
-            )
+            sent_msg = await update.effective_message.reply_text(INFO_MESSAGE)
         await save_user_message(user_id, sent_msg.message_id)
     except Exception as e:
         logging.error(
-            f"Si è verificato un errore nella fase di verifica dell'esistenza dell'utente: {e}",
+            f"{ERROR_INFO_MESSAGE} {e}",
             exc_info=DEBUG,
         )
         sent_msg = await update.effective_message.reply_text(
-            "❌ Si è verificato un errore nella fase di verifica dell'esistenza dell'utente"
+            ERROR_INFO_MESSAGE
         )
         await save_user_message(update.effective_user.id, sent_msg.message_id)
         if await user_is_admin(update.effective_user.id):
@@ -194,22 +184,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await save_user_message(
             update.effective_user.id, update.effective_message.message_id
         )  # save user message
-        msg = await update.effective_message.reply_text(
-            f"Ciao! Sono {ASSISTANT_NAME}, il tuo assistente personale 🤖\n"
-            "Puoi farmi domande liberamente.\n"
-            "Per sapere come funziona il bot, come vengono trattati i dati "
-            "e alcune avvertenze importanti, usa il comando /info."
-        )
+        msg = await update.effective_message.reply_text(WELCOME_MESSAGE)
         await save_user_message(
             update.effective_user.id, msg.message_id
         )  # salva msg bot
     except Exception as e:
         logging.error(
-            f"Si è verificato un errore nella fase di inizializzazione del bot: {e}",
+            f"{ERROR_START_MESSAGE} {e}",
             exc_info=DEBUG,
         )
         sent_msg = await update.effective_message.reply_text(
-            "❌ Si è verificato un errore nella fase di inizializzazione del bot"
+            ERROR_START_MESSAGE
         )
         await save_user_message(update.effective_user.id, sent_msg.message_id)
         if await user_is_admin(update.effective_user.id):
@@ -277,12 +262,7 @@ async def new_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await reset_user_messages(user_id)
 
         # Messaggio finale (nuova conversazione)
-        msg = await update.effective_message.reply_text(
-            f"Ciao! Sono {ASSISTANT_NAME}, il tuo assistente personale 🤖\n"
-            "Puoi farmi domande liberamente.\n"
-            "Per sapere come funziona il bot, come vengono trattati i dati "
-            "e alcune avvertenze importanti, usa il comando /info."
-        )
+        msg = await update.effective_message.reply_text(WELCOME_MESSAGE)
         await save_user_message(user_id, msg.message_id)
     except Exception as e:
         logging.error(
@@ -322,7 +302,7 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
         # Send waiting message
-        waiting_msg = await message.reply_text("⏳ Sto pensando...")
+        waiting_msg = await message.reply_text(WAITING_MESSAGE)
         await save_user_message(user_id, waiting_msg.message_id)
 
         content_blocks = await build_content_blocks(message, context)
@@ -343,7 +323,9 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     max_messages -= 1
         # Convert messages from dict to LangChain message objects
-        messages = messages_from_dict(messages[-max_messages:]) + [HumanMessage(content=content_blocks)]
+        messages = messages_from_dict(messages[-max_messages:]) + [
+            HumanMessage(content=content_blocks)
+        ]
 
         # invoke AI
         result = await client.ainvoke({"messages": messages})
@@ -381,13 +363,17 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 try:
                     data_doc: dict = json.loads(x["data"]["content"])
                     key_names = list(data_doc.keys())
-                    check_variable = all([name in key_names for name in ["path", "file_name", "creation_time"]])
+                    check_variable = all(
+                        [
+                            name in key_names
+                            for name in ["path", "file_name", "creation_time"]
+                        ]
+                    )
                     if check_variable:
                         if data_doc["creation_time"] > start_time:
                             with open(data_doc["path"], "rb") as f:
                                 await message.reply_document(
-                                    document=f,
-                                    filename=data_doc["file_name"]
+                                    document=f, filename=data_doc["file_name"]
                                 )
                             try:
                                 os.remove(data_doc["path"])
@@ -398,7 +384,7 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     continue
     except Exception as e:
         logging.error(
-            f"Si è verificato un errore durante l'elaborazione del tuo messaggio: {e}",
+            f"{ERROR_CHAT_MESSAGE} {e}",
             exc_info=DEBUG,
         )
         await delete_user_message(
@@ -408,7 +394,7 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [waiting_msg.message_id],
         )
         sent_msg = await message.reply_text(
-            "❌ Si è verificato un errore durante l'elaborazione del tuo messaggio."
+            ERROR_CHAT_MESSAGE
         )
         await save_user_message(user_id, sent_msg.message_id)
         if await user_is_admin(user_id):
